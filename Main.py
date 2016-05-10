@@ -9,28 +9,47 @@ try:
     error_file = open("Dump/log/mainerror.txt", "a")
 
     storageHandler= Neo4jConnector()
-    tfAlgo = Tfif()
-    LdaAlgo = LDA(5,80)
+
+
 
 
     print("welcome to wiki clustering ")
-    crawler = WikiCrawler(2)
-    #crawl 10 documents
+
+    #crawl pages from wikipedia
+    crawler = WikiCrawler(3)
     docList=[]
-    docList=crawler.crawl()
+    for i in range(0,1):
+        pages=[]
+        pages= crawler.crawl()
+        for page in pages:
+            docList.append(page)
+
+    #crawl 10 documents
+
+
     dict={}
+    #get topic distribution based out of LDA
     for document in docList:
-        #tfAlgo.analyze(document.getContent())
-        document.setLDA(LdaAlgo.analyze(document.getTitle(), document.getContent(),document.getID()))
-        dict[document.getTitle()]=document.getLDA()
+        LdaAlgo = LDA(6,80)
+        #LdaAlgo.train(docList)
+        resDict={}
+        resDict= LdaAlgo.analyze(document.getTitle(), document.getContent())
 
-    cAlgo = HierarchalCluster(dict.keys())
-    count= len(dict)
+        #document.setTags(resDict['word_list'])
 
-    temp=cAlgo.calculate_simMatrix(count , dict)
-    cAlgo.create_hierarchy(temp)
+        document.setTopicmatrix(resDict['topicMatrix'])
 
-    LdaAlgo.__del__()
+        dict[document.getTitle()]=resDict['word_list']
+        resDict =None
+        LdaAlgo.__del__()
+
+    clusterAlgo = LDA(6,80)
+    #calculate similarity against all documents
+    sim_Score= clusterAlgo.get_sim_score(dict)
+    hirAlgo = HierarchalCluster(dict.keys())
+    hirAlgo.create_hierarchy(sim_Score)
+
+
      #self.storageHandler.createNodes(page)
 except Exception, e:
                 error_file.write('Search failed:{ %s } \n' % ( e))

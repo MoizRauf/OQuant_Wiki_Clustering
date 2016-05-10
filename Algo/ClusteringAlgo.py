@@ -10,16 +10,54 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 class LDA:
-    def __init__(self, numTopic=None, passCount=None, wordCount=4):
-        self.path='Algo/tmp/'
+    def __init__(self, numTopic=None, passCount=None, wordCount=6):
+        self.path='Algo/Model/'
         self.log_file = open("Dump/log/LDA_put.txt", "a")
         self.numTopic = numTopic
         self.passcount = passCount
         self.numWords= wordCount
 
         return
+    def train(self,wiki_article):
+        tokenizedtext=[]
+        t0 = time()
 
-    def analyze(self,title, content, id):
+        for wiki in wiki_article:
+            # STEP 1 : create dictionary of raw text
+            document= wiki.getTitle() + wiki.getContent()
+            stem = tokenize_and_stem(document.lower())
+            tokenizedtext.append(stem)
+
+        dictionary = corpora.Dictionary(tokenizedtext)
+        print dictionary
+        dictionary.save(self.path+'source.dict') # store the dictionary, for future reference
+
+        # convert dictionary to vector space
+        corpus = [dictionary.doc2bow(t) for t in tokenizedtext]
+        corpora.MmCorpus.serialize(self.path+'source.mm', corpus) # store to disk
+
+
+        # Transform Text with TF-IDF
+        ldamodel = gensim.models.ldamodel.LdaModel(corpus, num_topics=self.numTopic, id2word=dictionary,
+                                                   passes=self.passcount)
+        model_name = self.path+'model'
+        ldamodel.save(model_name)
+
+        # corpus tf-idf
+        corpus_lda = ldamodel[corpus]
+
+        # STEP 3 : Create similarity matrix of all files
+        index = similarities.MatrixSimilarity(ldamodel[corpus])
+        index.save(self.path+'source.index')
+        index = similarities.MatrixSimilarity.load(self.path+'source.index')
+
+        sims = index[corpus_lda]
+
+        print "Done in %.3fs"%(time()-t0)
+
+        return
+
+    def analyze(self,title, content):
         tokenizedtext=[]
         t0 = time()
         document=title+content
@@ -47,19 +85,47 @@ class LDA:
             'Model \n %s \n--------------------------\n' % ldamodel.print_topics(self.numTopic,self.numWords))
 
         #topics_matrix = ldamodel.show_topics(formatted=False, num_words=self.numWords)
-        topics_matrix= ldamodel.print_topics(self.numTopic,self.numWords)
+        topics_matrix= ldamodel.show_topics(self.numTopic,self.numWords)
         word_list=[]
 
-
+        sparseDict={}
         #worst possible approach i could think of to get words
-        #dct = dict(topics_matrix)
-        #for key in dct:
-        #    dct2= dict(dct.get(key))
-        #    for word in dct2:
-        #         if word not in word_list:
-        #            word_list.append(word)
+        dct = dict(topics_matrix)
+        for key in dct:
+            dct2= dct.get(key)
+            splitList=dct2.split('+')
+            for word in splitList:
+                word1= word.split('*')[1].strip()
+                #sparseDict[word1]= word.split('*')[0].strip()
+                sparseDict[ word.split('*')[0].strip()]=word1
+                #if word1 not in word_list:
+                #    word_list.append(word1)
 
-        return topics_matrix
+        return {'topicMatrix':topics_matrix, 'word_list':sparseDict }
+
+    def get_sim_score(self,article_dict={}):
+        sim_matrix= numpy.zeros(shape=(len(article_dict),len(article_dict)))
+        i = 0
+
+        for doc1 in article_dict:
+            tags = ''
+            #for tag in article_dict[doc1]:
+            #    tags += tag.encode('utf-8')
+            #    tags += ' '
+            dense1 = gensim.matutils.sparse2full(article_dict[doc1], self.numTopic)
+            j = 0
+            for doc2 in article_dict:
+            #    doc2_tag=''
+            #    for tag2 in article_dict[doc2]:
+            #        doc2_tag += tag2.encode('utf-8')
+            #        doc2_tag += ' '
+                dense2 = gensim.matutils.sparse2full(article_dict[doc2], self.numTopic)
+                sim_val = numpy.sqrt(0.5 * ((numpy.sqrt(dense1) - numpy.sqrt(dense2))**2).sum())
+                sim_matrix[i][j]=sim_val
+                j+=1
+            i+=1
+
+        return sim_matrix
 
     def __del__(self):
         if  not self.log_file.closed:
@@ -67,33 +133,15 @@ class LDA:
         return
 
 class HierarchalCluster:
-    def __init__(self,*title):
+
+    def __init__(self,title=[]):
         self.titles=title
         self.path='Algo/tmp/'
         return
 
-    def calculate_simMatrix(self, numofDoc, clusterValue={}):
-        sim_matrix= numpy.zeros(shape=(numofDoc,numofDoc))
-        i = 0
-        j = 0
-        for doc1 in clusterValue:
-            #cluster lda value
-            #vec_lda1 = clusterValue[doc1]
-            vec_lda1 = models.LdaModel.load(self.path+str(doc1.encode('utf-8')))
-            for doc2 in clusterValue:
-               # vec_lda2=clusterValue[doc2]
-                vec_lda2= models.LdaModel.load(self.path+str(doc2.encode('utf-8')))
 
-                index = similarities.MatrixSimilarity(vec_lda1)
-                sims = index[vec_lda2]
-                sims = sorted(enumerate(sims), key=lambda item: -item[1])
-                print sims
-                j+=1
-            j=0
-        i+=1
-        return sim_matrix
 
-    def create_hierarchy(self, **sim_matrix):
+    def create_hierarchy(self, sim_matrix):
         linkage_matrix = ward(sim_matrix)
         fig, ax = plt.subplots(figsize=(15, 20)) # set size
         ax = dendrogram(linkage_matrix, orientation="right", labels=self.titles);
@@ -126,7 +174,7 @@ class Tfif:
         tokenizedtext.append(stem)
         dictionary = corpora.Dictionary(tokenizedtext)
 
-        #dictionary.save(self.path+'tweets.dict') # store the dictionary, for future reference
+        dictionary.save(self.path+'tweets.dict') # store the dictionary, for future reference
 
         # convert dictionary to vector space
         corpus = [dictionary.doc2bow(t) for t in tokenizedtext]
@@ -141,17 +189,17 @@ class Tfif:
 
         # STEP 3 : Create similarity matrix of all files
         index = similarities.MatrixSimilarity(tfidf[corpus])
-       # index.save(self.path+'deerwester.index')
-        #index = similarities.MatrixSimilarity.load(self.path+'deerwester.index')
+        index.save(self.path+'deerwester.index')
+        index = similarities.MatrixSimilarity.load(self.path+'deerwester.index')
 
         sims = index[corpus_tfidf]
 
         print "Done in %.3fs"%(time()-t0)
 
         print sims
-        #print list(enumerate(sims))
-        #sims = sorted(enumerate(sims), key=lambda item: item[1])
-        #print sims # print sorted (document number, similarity score) 2-tuples
+        print list(enumerate(sims))
+        sims = sorted(enumerate(sims), key=lambda item: item[1])
+        print sims # print sorted (document number, similarity score) 2-tuples
 
     def analyze2(self):
         # read data from object helper

@@ -5,21 +5,11 @@ __author__ = 'moiz'
 
 # represents a wikipedia page containing title, content
 class WikiPage:
-    #---------Properties----------
-    #nlp meta NER etc info
-    #tfIf value
-    #HDA value
-    #ward value
-    #--------------------------
-    #TODO: reset this value based on the documents saved in the db
-    pageCount = 0
-    clusterValue = None
-
+    tags =None
+    topicMatrix=None
     def __init__(self, title, content):
         self.title = title
         self.content = content
-        self.pageCount += 1
-
         return
 
     def getContent(self):
@@ -39,7 +29,18 @@ class WikiPage:
     def getLDA(self):
         return self.clusterValue
 
-    def getID(self):
-        return self.pageCount
+    def setTags(self,tag):
+        self.tags=tag
+        return
+
+    def getTags(self):
+        return self.tags
+
+    def setTopicmatrix(self,topicMatrix):
+        self.topicMatric= topicMatrix
+        return
+
+    def getTopicMatrix(self):
+        return self.topicMatrix
 
 
