@@ -1,0 +1,2 @@
+Search failed:{ can't multiply sequence by non-int of type 'unicode' } 
+Search failed:{ cannot concatenate 'str' and 'int' objects } 
